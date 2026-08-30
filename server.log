@@ -1,0 +1,179 @@
+-- Click Wars Database Schema for Supabase PostgreSQL
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- Users table
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    username VARCHAR(100) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    is_admin BOOLEAN DEFAULT FALSE,
+    admin_color VARCHAR(50) DEFAULT '#FFD700',
+    admin_font VARCHAR(50) DEFAULT "'Playfair Display', serif",
+    avatar_url TEXT DEFAULT NULL,
+    coins INTEGER DEFAULT 0,
+    stars INTEGER DEFAULT 0
+);
+
+-- Rooms table
+CREATE TABLE IF NOT EXISTS rooms (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    owner_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(200) NOT NULL,
+    tag VARCHAR(100) UNIQUE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    blocked BOOLEAN DEFAULT FALSE,
+    blocked_forever BOOLEAN DEFAULT FALSE,
+    blocked_until TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+    treasury_coins INTEGER DEFAULT 0,
+    treasury_pets INTEGER DEFAULT 0,
+    stars INTEGER DEFAULT 0,
+    design_level INTEGER DEFAULT 1,
+    custom_font VARCHAR(200) DEFAULT "'Inter', sans-serif",
+    tag_style INTEGER DEFAULT 1,
+    exclusive_pets_count INTEGER DEFAULT 0,
+    total_clicks BIGINT DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+-- Room members (join requests / members)
+CREATE TABLE IF NOT EXISTS room_members (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    approved BOOLEAN DEFAULT FALSE,
+    UNIQUE(room_id, user_id)
+);
+
+-- Clicks aggregation (for performance)
+CREATE TABLE IF NOT EXISTS user_clicks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
+    click_amount INTEGER DEFAULT 1,
+    clicked_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, room_id, clicked_at) -- approximate
+);
+
+-- User skill trees (click skills)
+CREATE TABLE IF NOT EXISTS user_skills (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+    click_power INTEGER DEFAULT 1,
+    click_speed INTEGER DEFAULT 1,
+    click_combo INTEGER DEFAULT 0,
+    egg_chance INTEGER DEFAULT 5, -- percent
+    pet_boost INTEGER DEFAULT 1,
+    skill_points INTEGER DEFAULT 0
+);
+
+-- Room skill trees (design skills)
+CREATE TABLE IF NOT EXISTS room_skills (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    room_id UUID REFERENCES rooms(id) ON DELETE CASCADE UNIQUE,
+    design_level INTEGER DEFAULT 1,
+    tag_custom INTEGER DEFAULT 0,
+    font_custom INTEGER DEFAULT 0,
+    color_scheme INTEGER DEFAULT 0,
+    animation_level INTEGER DEFAULT 0,
+    skill_points INTEGER DEFAULT 0
+);
+
+-- Pets
+CREATE TABLE IF NOT EXISTS pets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    owner_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL DEFAULT 'Pet',
+    rarity VARCHAR(50) NOT NULL DEFAULT 'Basic', -- Basic, Common, Rare, Legendary, Exclusive
+    is_exclusive BOOLEAN DEFAULT FALSE,
+    image_url TEXT,
+    stats_strength INTEGER DEFAULT 1,
+    stats_intelligence INTEGER DEFAULT 1,
+    stats_luck INTEGER DEFAULT 1,
+    hatched_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    egg_id UUID,
+    is_in_treasury BOOLEAN DEFAULT FALSE
+);
+
+-- Eggs
+CREATE TABLE IF NOT EXISTS eggs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
+    bought_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    hatched BOOLEAN DEFAULT FALSE,
+    hatched_pet_id UUID REFERENCES pets(id)
+);
+
+-- Chat messages
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    message TEXT NOT NULL,
+    sent_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    is_admin_message BOOLEAN DEFAULT FALSE,
+    admin_color VARCHAR(50) DEFAULT '#FFD700',
+    admin_font VARCHAR(50) DEFAULT "'Playfair Display', serif"
+);
+
+-- Treasury log
+CREATE TABLE IF NOT EXISTS treasury_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id),
+    action VARCHAR(50) NOT NULL, -- deposit, withdraw, seize, convert
+    coins_amount INTEGER DEFAULT 0,
+    pets_amount INTEGER DEFAULT 0,
+    stars_amount INTEGER DEFAULT 0,
+    details TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Promo codes
+CREATE TABLE IF NOT EXISTS promo_codes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
+    code VARCHAR(100) UNIQUE NOT NULL,
+    reward_type VARCHAR(50) NOT NULL, -- coins, pets, stars, egg
+    reward_amount INTEGER DEFAULT 0,
+    created_by UUID REFERENCES users(id),
+    used BOOLEAN DEFAULT FALSE,
+    used_by UUID REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Admin actions log
+CREATE TABLE IF NOT EXISTS admin_actions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    admin_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    target_type VARCHAR(50) NOT NULL, -- user, room
+    target_id UUID NOT NULL,
+    action VARCHAR(100) NOT NULL, -- block, unblock, give_coins, give_pets, seize_treasury, seize_items
+    details JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Insert admin user
+INSERT INTO users (username, email, password_hash, is_admin, admin_color, admin_font, coins, stars)
+VALUES (
+    'Granz1',
+    'admin@clickwars.com',
+    '$2b$10$ExampleHashedPasswordForGranz1',
+    TRUE,
+    '#FFD700',
+    "'Playfair Display', serif",
+    99999,
+    999
+)
+ON CONFLICT (username) DO NOTHING;
+
+-- Create default skills for admin
+INSERT INTO user_skills (user_id, click_power, click_speed, egg_chance)
+SELECT id, 10, 10, 50 FROM users WHERE username = 'Granz1'
+ON CONFLICT DO NOTHING;

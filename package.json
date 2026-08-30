@@ -1,0 +1,6 @@
+DB_URL=postgresql://postgres:[uQi-mFR-N7D-t9Q@db.rmrqassbafowbzyfqkks.supabase.co:5432/postgres
+PORT=3001
+NODE_ENV=development
+JWT_SECRET=clickwars_super_secret_key_2026
+ADMIN_USERNAME=Granz1
+ADMIN_PASSWORD=157816Nefo

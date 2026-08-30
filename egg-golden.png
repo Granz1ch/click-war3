@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Click Wars — Arena Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,600;1,300&family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="stars-bg"></div>
+
+<header class="nav-glass">
+  <a href="#" onclick="goHome()" class="logo">⚔ Click Wars</a>
+  <div class="nav-links">
+    <a href="#" onclick="showTab('dashboard')">Dashboard</a>
+    <a href="#" onclick="showTab('rooms-create')">Create Room</a>
+    <a href="#" onclick="showTab('pets')">Pets</a>
+    <a href="#" onclick="showTab('admin')" id="adminLink" style="display:none">Admin</a>
+    <a href="#" onclick="logout()">Exit</a>
+  </div>
+</header>
+
+<main style="position:relative;z-index:2;padding-top:120px;max-width:1300px;margin:0 auto;">
+
+  <!-- DASHBOARD -->
+  <section id="tab-dashboard" class="section-glass" style="display:block;">
+    <h2>Welcome, <span id="userName">Warrior</span></h2>
+    <div class="stats-row" style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:32px;">
+      <div class="card-glass" style="flex:1;min-width:160px;"><h4>Coins</h4><p style="font-size:1.8rem;color:var(--gold-solid);font-family:var(--font-display);" id="userCoins">0</p></div>
+      <div class="card-glass" style="flex:1;min-width:160px;"><h4>Stars</h4><p style="font-size:1.8rem;color:var(--gold-solid);font-family:var(--font-display);" id="userStars">0</p></div>
+      <div class="card-glass" style="flex:1;min-width:160px;"><h4>Exclusive Pets</h4><p style="font-size:1.8rem;color:var(--gold-solid);font-family:var(--font-display);" id="exclusiveCount">0</p></div>
+    </div>
+
+    <h3>Your Realm</h3>
+    <div id="myRoomArea"></div>
+
+    <h3 style="margin-top:48px;">All Realms</h3>
+    <div id="allRoomsGrid" class="cards-grid"></div>
+  </section>
+
+  <!-- CREATE ROOM -->
+  <section id="tab-rooms-create" class="section-glass" style="display:none;">
+    <h2>Create Realm</h2>
+    <p style="color:var(--text-dim);margin-bottom:24px;font-family:var(--font-editorial);font-style:italic;">Only one realm per warrior. Design it wisely.</p>
+    <div class="form-row">
+      <input id="roomName" placeholder="Realm Name" class="input-glass">
+      <input id="roomTag" placeholder="#realm-tag" class="input-glass">
+      <button onclick="createRoom()" class="btn-glass">Create Realm</button>
+    </div>
+  </section>
+
+  <!-- ROOM DETAIL -->
+  <section id="tab-room-detail" class="section-glass" style="display:none;">
+    <h2 id="roomDetailTitle">Realm</h2>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;margin-bottom:24px;">
+      <span id="roomTagDisplay" class="tag-label">#tag</span>
+      <span style="color:var(--text-dim);">Total Clicks: <strong id="roomClicks" style="color:var(--gold-solid);">0</strong></span>
+      <span style="color:var(--text-dim);">Stars: <strong id="roomStars" style="color:var(--gold-solid);">0</strong></span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;">
+      <!-- Click Area -->
+      <div class="card-glass" style="position:relative;overflow:hidden;">
+        <h3>⚔ Click Arena</h3>
+        <p style="color:var(--text-dim);font-size:0.85rem;margin-bottom:16px;">Each click grows your realm. Summon your skill.</p>
+        <button onclick="clickRoom()" class="btn-glass" style="font-size:1.4rem;padding:24px 48px;width:100%;">CLICK</button>
+        <p style="margin-top:12px;font-size:0.8rem;color:var(--text-dim);">Click Power: <span id="clickPower">1</span> | Speed: <span id="clickSpeed">1</span></p>
+      </div>
+
+      <!-- Skill Tree -->
+      <div class="card-glass">
+        <h3>Skill Tree</h3>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          <button onclick="upgradeSkill('click_power',1)" class="btn-glass" style="font-size:0.85rem;padding:8px 16px;">Power +1</button>
+          <button onclick="upgradeSkill('click_speed',1)" class="btn-glass" style="font-size:0.85rem;padding:8px 16px;">Speed +1</button>
+          <button onclick="upgradeSkill('click_combo',1)" class="btn-glass" style="font-size:0.85rem;padding:8px 16px;">Combo +1</button>
+        </div>
+      </div>
+
+      <!-- Pets -->
+      <div class="card-glass">
+        <h3>Pets</h3>
+        <div id="petsGrid" class="cards-grid" style="margin-top:12px;"></div>
+        <button onclick="buyEgg()" class="btn-glass" style="margin-top:12px;width:100%;">Buy Egg (50 coins)</button>
+      </div>
+
+      <!-- Chat -->
+      <div class="card-glass" style="min-height:320px;">
+        <h3>Chat</h3>
+        <div id="chatMessages" style="height:200px;overflow-y:auto;padding:12px;background:rgba(0,0,0,0.2);border-radius:12px;margin-bottom:12px;font-size:0.85rem;line-height:1.5;">
+          <p style="color:var(--text-dim);font-style:italic;">Welcome to the realm...</p>
+        </div>
+        <div class="form-row">
+          <input id="chatMsg" placeholder="Message..." class="input-glass" style="flex:1;min-width:140px;" onkeydown="if(event.key==='Enter')sendChat()">
+          <button onclick="sendChat()" class="btn-glass">Send</button>
+        </div>
+      </div>
+
+      <!-- Treasury -->
+      <div class="card-glass">
+        <h3>Treasury</h3>
+        <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:12px;">Deposit for stars and ranking.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input id="treasuryCoins" type="number" placeholder="Coins" class="input-glass" style="flex:1;min-width:100px;">
+          <button onclick="depositTreasury()" class="btn-glass">Deposit</button>
+        </div>
+        <div style="margin-top:12px;padding:12px;background:rgba(255,215,0,0.05);border-radius:12px;border:1px solid rgba(255,215,0,0.1);">
+          <p style="font-size:0.8rem;color:var(--text-dim);">Treasury Coins: <strong id="treasuryCoinsVal" style="color:var(--gold-solid);">0</strong></p>
+          <p style="font-size:0.8rem;color:var(--text-dim);">Treasury Pets: <strong id="treasuryPetsVal" style="color:var(--gold-solid);">0</strong></p>
+        </div>
+      </div>
+
+      <!-- Promos -->
+      <div class="card-glass">
+        <h3>Promo Codes</h3>
+        <div id="promoList" style="max-height:120px;overflow-y:auto;margin-bottom:12px;"></div>
+        <div class="form-row">
+          <input id="promoCode" placeholder="CODE" class="input-glass">
+          <button onclick="usePromo()" class="btn-glass">Redeem</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PETS -->
+  <section id="tab-pets" class="section-glass" style="display:none;">
+    <h2>My Pets</h2>
+    <div id="allPetsGrid" class="cards-grid"></div>
+    <h3 style="margin-top:32px;">Eggs</h3>
+    <div id="eggsGrid" class="cards-grid"></div>
+  </section>
+
+  <!-- ADMIN -->
+  <section id="tab-admin" class="section-glass" style="display:none;">
+    <h2>Admin Command</h2>
+    <p style="color:var(--gold-solid);font-family:var(--font-display);font-size:1.2rem;margin-bottom:24px;">Administrator: <span id="adminName">Granz1</span></p>
+
+    <h3>All Rooms</h3>
+    <div id="adminRooms" class="cards-grid"></div>
+
+    <h3 style="margin-top:48px;">Actions</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;">
+      <div class="card-glass">
+        <h4>Block Room</h4>
+        <input id="blockRoomId" placeholder="Room ID" class="input-glass" style="margin:12px 0;">
+        <label><input type="checkbox" id="blockForever"> Forever</label><br>
+        <button onclick="adminBlock()" class="btn-glass" style="margin-top:8px;">Block</button>
+      </div>
+      <div class="card-glass">
+        <h4>Give Rewards</h4>
+        <input id="giveUserId" placeholder="User ID" class="input-glass" style="margin:12px 0;">
+        <input id="giveCoins" type="number" placeholder="Coins" class="input-glass">
+        <button onclick="adminGive()" class="btn-glass" style="margin-top:8px;">Give</button>
+      </div>
+      <div class="card-glass">
+        <h4>Seize Treasury</h4>
+        <input id="seizeRoomId" placeholder="Room ID" class="input-glass" style="margin:12px 0;">
+        <input id="seizeCoins" type="number" placeholder="Coins" class="input-glass">
+        <button onclick="adminSeize()" class="btn-glass" style="margin-top:8px;">Seize</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer-glass">
+  <p>© Click Wars Arena. Built for warriors.</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

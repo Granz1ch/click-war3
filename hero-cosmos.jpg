@@ -1,0 +1,300 @@
+// Click Wars Frontend App
+const API = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ? 'http://localhost:3001/api'
+  : (window.ENV_API || '/api');
+let currentRoomId = null;
+let token = localStorage.getItem('cw_token');
+
+function api(path, opts = {}) {
+    const headers = { 'Content-Type': 'application/json', ...opts.headers };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    return fetch(API + path, { ...opts, headers }).then(r => r.json().catch(() => ({}))).catch(e => ({ error: e.message }));
+}
+
+async function init() {
+    if (token) {
+        const me = await api('/me');
+        if (me.id) {
+            window.currentUser = me;
+            updateUI();
+            return;
+        }
+    }
+    // Not logged in — show login overlay or redirect to index
+    window.location.href = '/';
+}
+
+function goHome() { window.location.href = '/'; }
+
+function showTab(name) {
+    document.querySelectorAll('main > section').forEach(s => s.style.display = 'none');
+    document.getElementById('tab-' + name).style.display = 'block';
+    if (name === 'dashboard') loadDashboard();
+    if (name === 'pets') loadPets();
+    if (name === 'admin') loadAdmin();
+}
+
+async function loadDashboard() {
+    document.getElementById('userName').textContent = window.currentUser?.username || 'Warrior';
+    document.getElementById('userCoins').textContent = window.currentUser?.coins || 0;
+    document.getElementById('userStars').textContent = window.currentUser?.stars || 0;
+    document.getElementById('exclusiveCount').textContent = 0; // updated from pets
+    document.getElementById('adminLink').style.display = window.currentUser?.is_admin ? 'inline-block' : 'none';
+
+    const rooms = await api('/rooms');
+    if (!rooms.error && Array.isArray(rooms)) {
+        document.getElementById('allRoomsGrid').innerHTML = rooms.map(r => `
+            <div class="card-glass" onclick="openRoomDetail('${r.id}','${r.tag}','${r.name}')">
+                <h3>${r.name}</h3>
+                <span class="tag-label">${r.tag}</span>
+                <p class="meta">Clicks: ${r.total_clicks || 0} | Stars: ${r.stars || 0} | Owner: ${r.owner_name}</p>
+            </div>
+        `).join('');
+    }
+
+    // Load user's room
+    const userRooms = rooms.filter ? rooms.filter(r => r.owner_id === window.currentUser?.id) : [];
+    if (userRooms.length > 0) {
+        const r = userRooms[0];
+        currentRoomId = r.id;
+        document.getElementById('myRoomArea').innerHTML = `
+            <div class="card-glass" onclick="openRoomDetail('${r.id}','${r.tag}','${r.name}')">
+                <h3>${r.name}</h3>
+                <span class="tag-label">${r.tag}</span>
+                <p class="meta">Your realm. Clicks: ${r.total_clicks || 0} | Stars: ${r.stars || 0}</p>
+                <button onclick="openRoomView('${r.id}','${r.tag}','${r.name}')" class="btn-glass" style="margin-top:16px;">Enter Realm</button>
+            </div>
+        `;
+    } else {
+        document.getElementById('myRoomArea').innerHTML = '<p style="color:var(--text-dim);">No realm created. <a href="#" onclick="showTab(\'rooms-create\')" class="link-gold">Create one</a>.</p>';
+    }
+}
+
+function openRoomDetail(id, tag, name) {
+    currentRoomId = id;
+    showTab('room-detail');
+    document.getElementById('roomDetailTitle').textContent = name;
+    document.getElementById('roomTagDisplay').textContent = tag;
+    loadRoomDetail();
+}
+
+function openRoomView(id, tag, name) {
+    currentRoomId = id;
+    showTab('room-detail');
+    document.getElementById('roomDetailTitle').textContent = name;
+    document.getElementById('roomTagDisplay').textContent = tag;
+    loadRoomDetail();
+    loadChat();
+    loadPets();
+}
+
+async function loadRoomDetail() {
+    if (!currentRoomId) return;
+    const r = await api('/rooms/' + currentRoomId);
+    if (r && !r.error) {
+        document.getElementById('roomClicks').textContent = r.total_clicks || 0;
+        document.getElementById('roomStars').textContent = r.stars || 0;
+    }
+    const skills = await api('/users/skills');
+    document.getElementById('clickPower').textContent = skills?.click_power || 1;
+    document.getElementById('clickSpeed').textContent = skills?.click_speed || 1;
+    loadPets();
+    loadChat();
+    loadTreasury();
+    loadPromos();
+}
+
+async function clickRoom() {
+    if (!currentRoomId) return alert('Select a room first');
+    const res = await api('/rooms/' + currentRoomId + '/click', { method: 'POST' });
+    if (res.message || !res.error) {
+        document.getElementById('roomClicks').textContent = res.total || (parseInt(document.getElementById('roomClicks').textContent) + (res.clicks || 1));
+    }
+}
+
+async function upgradeSkill(skill, cost) {
+    const res = await api('/users/skills/upgrade', { method: 'POST', body: JSON.stringify({ skill, cost }) });
+    if (!res.error) {
+        document.getElementById('clickPower').textContent = res.click_power || 1;
+        document.getElementById('clickSpeed').textContent = res.click_speed || 1;
+        loadDashboard();
+    }
+}
+
+async function buyEgg() {
+    const res = await api('/eggs/buy', { method: 'POST' });
+    if (!res.error) loadPets(); else alert(res.error);
+}
+
+async function loadPets() {
+    const pets = await api('/users/pets');
+    const eggs = await api('/eggs'); // not implemented directly, let's simulate
+    // For simplicity, load pets from user endpoint
+    if (!pets || pets.error) pets = [];
+    const exclusive = pets.filter(p => p.is_exclusive).length;
+    document.getElementById('exclusiveCount').textContent = exclusive;
+    document.getElementById('petsGrid').innerHTML = pets.map(p => `
+        <div class="card-glass" style="text-align:center;">
+            <img src="${p.image_url || 'assets/pet-basic.png'}" alt="${p.name}" style="width:80px;height:80px;object-fit:contain;border-radius:50%;border:2px solid var(--gold-solid);margin-bottom:12px;">
+            <h4 style="font-family:var(--font-display);">${p.name}</h4>
+            <span class="tag-label" style="margin-top:4px;display:inline-block;">${p.rarity}</span>
+            ${p.rarity === 'Exclusive' ? '<p style="color:var(--gold-solid);font-weight:bold;margin-top:6px;">★ Exclusive ★</p>' : ''}
+        </div>
+    `).join('') || '<p style="color:var(--text-dim);">No pets yet.</p>';
+    // Load all pets for pets tab
+    document.getElementById('allPetsGrid').innerHTML = document.getElementById('petsGrid').innerHTML;
+}
+
+async function loadChat() {
+    if (!currentRoomId) return;
+    const msgs = await api('/rooms/' + currentRoomId + '/chat');
+    if (msgs && Array.isArray(msgs)) {
+        document.getElementById('chatMessages').innerHTML = msgs.map(m => {
+            const isAdmin = m.is_admin_message;
+            const nameColor = isAdmin ? (m.admin_color || '#FFD700') : 'var(--gold-solid)';
+            const nameFont = isAdmin ? (m.admin_font || "'Playfair Display', serif") : "'Inter', sans-serif";
+            return `<p><strong style="color:${nameColor};font-family:${nameFont};">${m.username || 'Unknown'}${isAdmin ? ' [ADMIN]' : ''}:</strong> ${m.message}</p>`;
+        }).join('');
+    }
+}
+
+async function sendChat() {
+    const msg = document.getElementById('chatMsg').value.trim();
+    if (!msg || !currentRoomId) return;
+    await api('/rooms/' + currentRoomId + '/chat', { method: 'POST', body: JSON.stringify({ message: msg }) });
+    document.getElementById('chatMsg').value = '';
+    loadChat();
+}
+
+async function loadTreasury() {
+    if (!currentRoomId) return;
+    const res = await api('/rooms/' + currentRoomId + '/treasury');
+    if (res && !res.error) {
+        document.getElementById('treasuryCoinsVal').textContent = res.coins || 0;
+        document.getElementById('treasuryPetsVal').textContent = res.pets || 0;
+    }
+}
+
+async function depositTreasury() {
+    if (!currentRoomId) return;
+    const coins = parseInt(document.getElementById('treasuryCoins').value) || 0;
+    await api('/rooms/' + currentRoomId + '/treasury/deposit', { method: 'POST', body: JSON.stringify({ coins }) });
+    loadTreasury();
+    document.getElementById('treasuryCoins').value = '';
+    loadDashboard();
+}
+
+async function loadPromos() {
+    if (!currentRoomId) return;
+    const res = await api('/rooms/' + currentRoomId + '/promos');
+    if (res && Array.isArray(res)) {
+        document.getElementById('promoList').innerHTML = res.map(p => `<p style="font-size:0.8rem;color:var(--text-dim);">${p.code} — ${p.reward_type} x${p.reward_amount}</p>`).join('');
+    }
+}
+
+async function usePromo() {
+    const code = document.getElementById('promoCode').value.trim();
+    if (!code) return;
+    const res = await api('/promos/use', { method: 'POST', body: JSON.stringify({ code }) });
+    alert(res.message || res.error);
+    loadDashboard();
+}
+
+// Room creation
+async function createRoom() {
+    const name = document.getElementById('roomName').value.trim();
+    const tag = document.getElementById('roomTag').value.trim();
+    if (!name || !tag) return alert('Name and tag required');
+    const res = await api('/rooms', { method: 'POST', body: JSON.stringify({ name, tag }) });
+    if (!res.error) {
+        currentRoomId = res.room.id;
+        showTab('room-detail');
+        document.getElementById('roomDetailTitle').textContent = name;
+        document.getElementById('roomTagDisplay').textContent = tag;
+        loadRoomDetail();
+        loadDashboard();
+    } else alert(res.error);
+}
+
+// Auth
+async function register() {
+    const u = document.getElementById('regUsername').value.trim();
+    const e = document.getElementById('regEmail').value.trim();
+    const p = document.getElementById('regPassword').value;
+    if (!u || !e || !p) return alert('All fields required');
+    const res = await api('/auth/register', { method: 'POST', body: JSON.stringify({ username: u, email: e, password: p }) });
+    if (!res.error) {
+        alert('Registered! Log in.');
+    } else alert(res.error);
+}
+
+function showLogin() {
+    // Simplified: redirect to index with login focus
+    window.location.href = '/';
+}
+
+async function login() {
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    if (!username || !password) return alert('Enter credentials');
+    const res = await api('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+    if (res.token) {
+        token = res.token;
+        localStorage.setItem('cw_token', token);
+        window.currentUser = res.user;
+        updateUI();
+    } else alert(res.error);
+}
+
+function updateUI() {
+    document.getElementById('adminLink').style.display = window.currentUser?.is_admin ? 'inline-block' : 'none';
+    loadDashboard();
+}
+
+function logout() {
+    localStorage.removeItem('cw_token');
+    token = null;
+    window.currentUser = null;
+    window.location.href = '/';
+}
+
+// Admin
+async function loadAdmin() {
+    const rooms = await api('/admin/rooms');
+    if (rooms && Array.isArray(rooms)) {
+        document.getElementById('adminRooms').innerHTML = rooms.map(r => `
+            <div class="card-glass">
+                <h3>${r.name}</h3>
+                <span class="tag-label">${r.tag}</span>
+                <p class="meta">Blocked: ${r.blocked ? 'Yes' : 'No'} | Clicks: ${r.total_clicks}</p>
+            </div>
+        `).join('');
+    }
+}
+
+async function adminBlock() {
+    const id = document.getElementById('blockRoomId').value.trim();
+    const forever = document.getElementById('blockForever').checked;
+    if (!id) return alert('Enter room ID');
+    await api('/admin/block-room', { method: 'POST', body: JSON.stringify({ room_id: id, forever }) });
+    alert('Blocked!');
+    loadAdmin();
+}
+
+async function adminGive() {
+    const userId = document.getElementById('giveUserId').value.trim();
+    const coins = parseInt(document.getElementById('giveCoins').value) || 0;
+    if (!userId) return alert('Enter user ID');
+    await api('/admin/give', { method: 'POST', body: JSON.stringify({ user_id: userId, coins }) });
+    alert('Given!');
+}
+
+async function adminSeize() {
+    const roomId = document.getElementById('seizeRoomId').value.trim();
+    const coins = parseInt(document.getElementById('seizeCoins').value) || 0;
+    if (!roomId) return alert('Enter room ID');
+    await api('/admin/seize-treasury', { method: 'POST', body: JSON.stringify({ room_id: roomId, coins }) });
+    alert('Seized!');
+}
+
+init();
