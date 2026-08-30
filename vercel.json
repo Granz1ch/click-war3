@@ -1,6 +1,8 @@
-#!/bin/bash
-echo "Running Click Wars Database Schema..."
-echo "Connection: postgresql://postgres:[uQi-mFR-N7D-t9Q@db.rmrqassbafowbzyfqkks.supabase.co:5432/postgres"
-echo "Please run schema.sql manually in your Supabase SQL Editor, or use psql:"
-echo "psql \"postgresql://postgres:[uQi-mFR-N7D-t9Q@db.rmrqassbafowbzyfqkks.supabase.co:5432/postgres\" -f schema.sql"
-echo "Admin account created: Granz1 / 157816Nefo (is_admin = true)"
+{
+  "version": 2,
+  "env": {
+    "DB_URL": "postgresql://postgres:[uQi-mFR-N7D-t9Q@db.rmrqassbafowbzyfqkks.supabase.co:5432/postgres",
+    "JWT_SECRET": "clickwars_secret",
+    "NODE_ENV": "production"
+  }
+}
